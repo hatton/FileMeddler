@@ -7,6 +7,9 @@ We get occasional unreproducible bug reports from users in which some other prog
 ## What it Does
 
 FileMeddler watches all the files in a directory (including subdirectories). When one is added, modified, or renamed, it attempts to grab exclusive lock on the file for a couple seconds.
+
+![](https://i.imgur.com/bY4gLSL.png)
+
 ## Usage
 In a console, go to a directory where your application writes files, and start to meddle:
 
