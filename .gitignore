@@ -1,0 +1,7 @@
+*.suo
+*.user
+output/*
+bin/
+obj/
+_ReSharper*/*
+.vs
