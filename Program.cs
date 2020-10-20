@@ -48,45 +48,61 @@ namespace FileMeddler
 
 		private static void SomethingHappened(object sender, FileSystemEventArgs e)
 		{
+			// if a new directory was created or renamed, camp on all of its files 
+			if (Directory.Exists(e.FullPath))
+			{
+				try
+				{
+					foreach (var f in Directory.GetFiles(e.FullPath))
+					{
+						var x = new Thread(() => CampOnFile(f, e.ChangeType));
+						x.Start();
+					}
+				}
+				catch (Exception err)
+				{
+					Print(ConsoleColor.Red, "   Error trying to camp on all files in: " + e.FullPath);
+					Print(ConsoleColor.Red, "   " + err.Message);
+				}
+				return;
+			}
+
 			//the FileWatcher won't give us a new one until
 			//we return. Since timing is the whole point here,
 			//we spawn a thread to try and grab that file and return quickly.
-			var t = new Thread(() => CampOnFile(e));
+			var t = new Thread(() => CampOnFile(e.FullPath, e.ChangeType));
 			t.Start();
 		}
 
-		private static void CampOnFile(FileSystemEventArgs e)
+		private static void CampOnFile(string fullPath, WatcherChangeTypes changeType)
 		{
-			if(Directory.Exists(e.FullPath))
-				return; //it's not a file
-
-			var filename = Path.GetFileName(e.FullPath);
+			var filename = Path.GetFileName(fullPath);
 
 			var extension = Path.GetExtension(filename);
 			if (s_extensionsToIgnore.Contains(extension.ToLowerInvariant()))
 				return;
 
-			if (s_filesInProcess.Contains(e.FullPath))
+			if (s_filesInProcess.Contains(fullPath))
 			{
 				//Print(ConsoleColor.Gray, "   Already processing: " + filename);
 				return;
 			}
 			else
 			{
-				s_filesInProcess.Add(e.FullPath);
+				s_filesInProcess.Add(fullPath);
 			}
 
 			var startTime = DateTime.Now.AddMilliseconds(kGiveUpMilliseconds);
 			var reportedWaiting = false;
-			var relativePath = e.FullPath.Replace(s_root, "") + " ";
-			switch (e.ChangeType)
+			var relativePath = fullPath.Replace(s_root, "") + " ";
+			switch (changeType)
 			{
 				case WatcherChangeTypes.Created:
 					Print(ConsoleColor.DarkMagenta, "Creation: " + relativePath);
 					break;
 				case WatcherChangeTypes.Deleted:
 					Print(ConsoleColor.DarkRed, "Deletion: " + relativePath);
-					s_filesInProcess.Remove(e.FullPath);
+					s_filesInProcess.Remove(fullPath);
 					return;
 				case WatcherChangeTypes.Changed:
 					Print(ConsoleColor.Cyan, "Modified: " + relativePath);
@@ -101,20 +117,20 @@ namespace FileMeddler
 			{
 				try
 				{
-					using(File.Open(e.FullPath, FileMode.Open, FileAccess.Read, FileShare.None))
+					using(File.Open(fullPath, FileMode.Open, FileAccess.Read, FileShare.None))
 					{
 						
 						Print(ConsoleColor.Yellow, "   Locking: " + filename);
 						Thread.Sleep(kLockMilliseconds);
 					}
 					Print(ConsoleColor.Green, "   Released: " + filename);
-					s_filesInProcess.Remove(e.FullPath);
+					s_filesInProcess.Remove(fullPath);
 					return;
 				}
 				catch(FileNotFoundException)
 				{
 					Print(ConsoleColor.DarkGreen, "   File gone: " + filename);
-					s_filesInProcess.Remove(e.FullPath);
+					s_filesInProcess.Remove(fullPath);
 					return;
 				}
 				catch(Exception error)
@@ -123,7 +139,7 @@ namespace FileMeddler
 					{
 						Print(ConsoleColor.Red, "   Giving up waiting for: " + filename);
 						Print(ConsoleColor.Red, error.Message);
-						s_filesInProcess.Remove(e.FullPath);
+						s_filesInProcess.Remove(fullPath);
 						return;
 					}
 					if(!reportedWaiting)
